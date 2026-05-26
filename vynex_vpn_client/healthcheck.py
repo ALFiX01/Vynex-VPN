@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 import threading
+import time
 
 import requests
 
@@ -63,48 +63,28 @@ class XrayHealthChecker:
         timeout: int,
         request_kwargs: dict,
     ) -> HealthcheckResult:
-        return asyncio.run(
-            self._probe_async(
-                attempts=attempts,
-                timeout=timeout,
-                request_kwargs=request_kwargs,
-            )
-        )
-
-    async def _probe_async(
-        self,
-        *,
-        attempts: int,
-        timeout: int,
-        request_kwargs: dict,
-    ) -> HealthcheckResult:
         errors: list[str] = []
         all_failures_are_timeouts = True
-        loop = asyncio.get_running_loop()
         for attempt in range(1, attempts + 1):
-            tasks = [
-                loop.run_in_executor(
-                    self._executor,
-                    self._probe_url,
-                    url,
-                    timeout,
-                    request_kwargs,
-                )
+            futures: set[Future[tuple[bool, str, str | None, bool]]] = {
+                self._executor.submit(self._probe_url, url, timeout, request_kwargs)
                 for url in HEALTHCHECK_URLS
-            ]
+            }
             try:
-                for task in asyncio.as_completed(tasks):
-                    ok, message, checked_url, is_timeout = await task
-                    if ok:
-                        return HealthcheckResult(ok=True, message=message, checked_url=checked_url)
-                    errors.append(message)
-                    if not is_timeout:
-                        all_failures_are_timeouts = False
+                while futures:
+                    done, futures = wait(futures, return_when=FIRST_COMPLETED)
+                    for task in done:
+                        ok, message, checked_url, is_timeout = task.result()
+                        if ok:
+                            return HealthcheckResult(ok=True, message=message, checked_url=checked_url)
+                        errors.append(message)
+                        if not is_timeout:
+                            all_failures_are_timeouts = False
             finally:
-                for task in tasks:
+                for task in futures:
                     task.cancel()
             if attempt < attempts:
-                await asyncio.sleep(min(attempt, 2))
+                time.sleep(min(attempt, 2))
         message = " | ".join(errors[-3:]) if errors else "Сетевой запрос не был выполнен."
         return HealthcheckResult(
             ok=False,

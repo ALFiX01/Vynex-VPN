@@ -10,12 +10,11 @@ pytest.importorskip("PySide6")
 pytest.importorskip("pytestqt")
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QSizePolicy  # noqa: E402
+from PySide6.QtWidgets import QLabel, QSizePolicy  # noqa: E402
 
 from vynex_vpn_client.app_service import ComponentsStatus  # noqa: E402
-from vynex_vpn_client.gui import design_tokens as tokens  # noqa: E402
 from vynex_vpn_client.gui.main_window import MainWindow  # noqa: E402
-from vynex_vpn_client.models import AppSettings, RuntimeState, ServerEntry  # noqa: E402
+from vynex_vpn_client.models import AppSettings, RuntimeState, ServerEntry, SubscriptionEntry  # noqa: E402
 
 
 class FakeService:
@@ -62,6 +61,9 @@ class FakeService:
 
     def best_tcp_ping_server(self, servers=None):
         return None
+
+    def list_winws_conflicts(self):
+        return ()
 
     def get_runtime_status(self, *, run_healthcheck: bool = False):
         raise RuntimeError("not implemented in fake")
@@ -110,9 +112,9 @@ def test_connect_button_runs_connect_in_background(qtbot) -> None:
     window = MainWindow(service=service)
     qtbot.addWidget(window)
 
-    assert window.connect_button.isEnabled() is False
-    qtbot.mouseClick(window._connection_server_cards[service.server.id], Qt.MouseButton.LeftButton)
     assert window.connect_button.isEnabled() is True
+    assert window.servers_table.currentRow() == 0
+    assert window.connection_selected_server_value.text() == "Alpha"
 
     qtbot.mouseClick(window.connect_button, Qt.MouseButton.LeftButton)
 
@@ -124,7 +126,7 @@ def test_connect_button_runs_connect_in_background(qtbot) -> None:
     assert window.status_value.text() == "Подключено"
 
 
-def test_connection_server_list_expands_in_large_window(qtbot) -> None:
+def test_connection_page_embeds_server_table_and_details(qtbot) -> None:
     service = FakeService()
     service.servers = [
         ServerEntry.new(
@@ -143,13 +145,34 @@ def test_connection_server_list_expands_in_large_window(qtbot) -> None:
     window.resize(1600, 950)
     window.show()
 
-    assert window.connection_server_scroll is not None
-    assert (
-        window.connection_server_scroll.sizePolicy().verticalPolicy()
-        == QSizePolicy.Policy.Expanding
-    )
-    qtbot.waitUntil(
-        lambda: window.connection_server_scroll is not None
-        and window.connection_server_scroll.height() > tokens.CONNECTION_SERVER_LIST_HEIGHT,
-        timeout=1000,
-    )
+    assert window.servers_table.rowCount() == 10
+    assert window.server_detail_labels["address"].text() == "example0.com"
+    assert window.server_detail_labels["port"].text() == "443"
+    assert window.servers_table.sizePolicy().verticalPolicy() == QSizePolicy.Policy.Expanding
+
+
+def test_subscriptions_table_counts_actual_owned_servers(qtbot) -> None:
+    service = FakeService()
+    subscription = SubscriptionEntry.new(url="https://example.com/sub", title="Example")
+    subscription.id = "sub-1"
+    subscription.server_ids = ["missing-1", "missing-2"]
+    service.server.source = "subscription"
+    service.server.subscription_id = subscription.id
+    service.list_subscriptions = lambda: [subscription]
+
+    window = MainWindow(service=service)
+    qtbot.addWidget(window)
+
+    assert window.subscriptions_table.item(0, 2).text() == "1"
+
+
+def test_connection_empty_state_guides_import(qtbot) -> None:
+    service = FakeService()
+    service.servers = []
+    window = MainWindow(service=service)
+    qtbot.addWidget(window)
+
+    assert window.connect_button.isEnabled() is False
+    assert window.connection_selected_server_value.text() == "Импортируйте сервер"
+    assert window.servers_empty_state is not None
+    assert any("Добавить сервер" in label.text() for label in window.servers_empty_state.findChildren(QLabel))

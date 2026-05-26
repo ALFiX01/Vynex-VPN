@@ -274,7 +274,6 @@ def _deduplicate(servers: list[Server]) -> list[Server]:
 
 def merge_servers(old: list[Server], fresh: list[Server]) -> list[Server]:
     old_by_key = {_server_key(server): server for server in old}
-    fresh_by_key = {_server_key(server): server for server in fresh}
 
     merged: list[Server] = []
     for server in fresh:
@@ -295,24 +294,6 @@ def merge_servers(old: list[Server], fresh: list[Server]) -> list[Server]:
                 port=server.port,
                 uuid=server.uuid,
                 name=name,
-                raw_uri=server.raw_uri,
-                extra=extra,
-            )
-        )
-
-    for server in old:
-        key = _server_key(server)
-        if key in fresh_by_key:
-            continue
-        extra = dict(server.extra)
-        extra["stale"] = True
-        merged.append(
-            Server(
-                protocol=server.protocol,
-                address=server.address,
-                port=server.port,
-                uuid=server.uuid,
-                name=server.name,
                 raw_uri=server.raw_uri,
                 extra=extra,
             )

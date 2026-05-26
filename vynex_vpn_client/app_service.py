@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+import logging
 import os
 import threading
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -62,17 +64,18 @@ from .utils import (
     generate_random_password,
     generate_random_username,
     get_active_ipv4_interface,
+    is_port_available,
     is_running_as_admin,
     list_running_processes_by_names,
     pick_random_port,
     remove_ipv4_route,
     terminate_running_processes,
-    wait_for_port_listener,
     wait_for_tun_interface_details,
 )
 
 WINWS_CONFLICT_PROCESS_NAMES = ("Winws.exe", "Winws2.exe")
 ProgressCallback = Callable[[str], None]
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -166,7 +169,7 @@ class WinwsConflictError(RuntimeError):
         summary = VynexAppService.format_process_conflict_summary(self.conflicts)
         super().__init__(
             "Найдены конфликтующие процессы Winws. "
-            f"Остановите их перед подключением или разрешите автоматическое завершение: {summary}"
+            f"Их можно остановить перед подключением или продолжить без автоматического завершения: {summary}"
         )
 
 
@@ -989,7 +992,7 @@ class VynexAppService:
         try:
             self.check_app_update()
         except Exception:
-            pass
+            LOGGER.exception("Failed to refresh app update info in background.")
 
     def _detect_import_target(self, raw_value: str) -> tuple[str, str | list[ServerEntry]]:
         normalized = raw_value.strip()
@@ -1090,19 +1093,19 @@ class VynexAppService:
         self._save_runtime_state(state)
         return state
 
+    def list_winws_conflicts(self) -> tuple[RunningProcessDetails, ...]:
+        return tuple(list_running_processes_by_names(WINWS_CONFLICT_PROCESS_NAMES))
+
     def _ensure_winws_conflicts_resolved(self, *, terminate: bool) -> None:
-        conflicts = list_running_processes_by_names(WINWS_CONFLICT_PROCESS_NAMES)
+        conflicts = self.list_winws_conflicts()
         if not conflicts:
             return
         if not terminate:
-            raise WinwsConflictError(conflicts)
+            return
         failed_processes = terminate_running_processes(conflicts)
         if failed_processes:
             failed_summary = self.format_process_conflict_summary(failed_processes)
-            raise RuntimeError(
-                "Не удалось завершить конфликтующие процессы: "
-                f"{failed_summary}. Остановите их вручную и повторите подключение."
-            )
+            LOGGER.warning("Failed to terminate Winws conflict processes: %s", failed_summary)
 
     @staticmethod
     def format_process_conflict_summary(
@@ -1301,17 +1304,37 @@ class VynexAppService:
         mode: str,
         backend_id: str | None = None,
     ) -> None:
-        http_ready = wait_for_port_listener(proxy_session.http_port, timeout=12.0)
-        socks_ready = wait_for_port_listener(proxy_session.socks_port, timeout=12.0)
-        if http_ready and socks_ready:
-            return
         manager = self._process_manager_for_mode(mode, backend_id=backend_id)
-        if not manager.is_running(pid):
-            raise RuntimeError(
-                "Ядро завершилось до запуска локальных proxy-inbound.\n"
-                f"{manager.read_recent_output()}"
-            )
-        raise RuntimeError("Ядро не открыло локальные proxy-inbound вовремя.")
+        deadline = time.monotonic() + 12.0
+        poll_interval = 0.05
+        http_ready = False
+        socks_ready = False
+
+        while True:
+            if not http_ready:
+                http_ready = not is_port_available(proxy_session.http_port)
+            if not socks_ready:
+                socks_ready = not is_port_available(proxy_session.socks_port)
+            if http_ready and socks_ready:
+                return
+            if not manager.is_running(pid):
+                raise RuntimeError(
+                    "Ядро завершилось до запуска локальных proxy-inbound.\n"
+                    f"{manager.read_recent_output()}"
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(poll_interval, remaining))
+            poll_interval = min(poll_interval * 1.5, 0.5)
+
+        missing = []
+        if not http_ready:
+            missing.append(f"HTTP {proxy_session.http_port}")
+        if not socks_ready:
+            missing.append(f"SOCKS {proxy_session.socks_port}")
+        missing_label = ", ".join(missing) or "HTTP/SOCKS"
+        raise RuntimeError(f"Ядро не открыло локальные proxy-inbound вовремя: {missing_label}.")
 
     def _wait_for_tun_ready(
         self,
@@ -1373,7 +1396,7 @@ class VynexAppService:
         try:
             self._reset_runtime_state()
         except Exception:
-            pass
+            LOGGER.exception("Failed to reset runtime state after storage corruption.")
         state_file = getattr(error, "path", None)
         state_label = state_file.name if isinstance(state_file, Path) else "runtime_state.json"
         self.runtime_notice = RuntimeNotice(

@@ -95,12 +95,12 @@ if __package__ in {None, ""}:
         generate_random_username,
         get_active_ipv4_interface,
         get_interface_details,
+        is_port_available,
         is_running_as_admin,
         list_running_processes_by_names,
         pick_random_port,
         remove_ipv4_route,
         terminate_running_processes,
-        wait_for_port_listener,
         wait_for_tun_interface_details,
     )
     from vynex_vpn_client.tcp_ping import (
@@ -175,12 +175,12 @@ else:
         generate_random_username,
         get_active_ipv4_interface,
         get_interface_details,
+        is_port_available,
         is_running_as_admin,
         list_running_processes_by_names,
         pick_random_port,
         remove_ipv4_route,
         terminate_running_processes,
-        wait_for_port_listener,
         wait_for_tun_interface_details,
     )
 
@@ -1188,7 +1188,7 @@ class VynexVpnApp:
         detail_rows = [
             ("Процессы", conflict_summary),
             ("Почему это важно", "Winws может препятствовать нормальной работе VPN."),
-            ("Что сделать", "Остановить их перед подключением. Клиент может завершить их автоматически."),
+            ("Что сделать", "Можно продолжить подключение или попросить клиент завершить их автоматически."),
         ]
         self._render_screen()
         self.console.print(
@@ -1200,26 +1200,28 @@ class VynexVpnApp:
         )
         should_terminate = bool(
             questionary.confirm(
-                "Автоматически завершить Winws и продолжить подключение?",
-                default=True,
+                "Автоматически завершить Winws перед подключением?",
+                default=False,
             ).ask()
         )
         if not should_terminate:
             self.console.print(
                 Panel.fit(
-                    "Подключение отменено. Остановите Winws.exe / Winws2.exe и повторите попытку.",
+                    "Продолжаем подключение без завершения Winws.exe / Winws2.exe.",
                     border_style="yellow",
                 )
             )
-            self._pause()
-            return False
+            return True
 
         failed_processes = terminate_running_processes(conflicts)
         if failed_processes:
             failed_summary = self._format_process_conflict_summary(failed_processes)
-            raise RuntimeError(
-                "Не удалось завершить конфликтующие процессы: "
-                f"{failed_summary}. Остановите их вручную и повторите подключение."
+            self.console.print(
+                Panel.fit(
+                    "Не удалось завершить конфликтующие процессы: "
+                    f"{failed_summary}. Продолжаем подключение без автоматического завершения.",
+                    border_style="yellow",
+                )
             )
         return True
 
@@ -4287,17 +4289,37 @@ class VynexVpnApp:
         mode: str,
         backend_id: str | None = None,
     ) -> None:
-        http_ready = wait_for_port_listener(proxy_session.http_port, timeout=12.0)
-        socks_ready = wait_for_port_listener(proxy_session.socks_port, timeout=12.0)
-        if http_ready and socks_ready:
-            return
         manager = self._process_manager_for_mode(mode, backend_id=backend_id)
-        if not manager.is_running(pid):
-            raise RuntimeError(
-                "Ядро завершилось до запуска локальных proxy-inbound.\n"
-                f"{manager.read_recent_output()}"
-            )
-        raise RuntimeError("Ядро не открыло локальные proxy-inbound вовремя.")
+        deadline = time.monotonic() + 12.0
+        poll_interval = 0.05
+        http_ready = False
+        socks_ready = False
+
+        while True:
+            if not http_ready:
+                http_ready = not is_port_available(proxy_session.http_port)
+            if not socks_ready:
+                socks_ready = not is_port_available(proxy_session.socks_port)
+            if http_ready and socks_ready:
+                return
+            if not manager.is_running(pid):
+                raise RuntimeError(
+                    "Ядро завершилось до запуска локальных proxy-inbound.\n"
+                    f"{manager.read_recent_output()}"
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(poll_interval, remaining))
+            poll_interval = min(poll_interval * 1.5, 0.5)
+
+        missing = []
+        if not http_ready:
+            missing.append(f"HTTP {proxy_session.http_port}")
+        if not socks_ready:
+            missing.append(f"SOCKS {proxy_session.socks_port}")
+        missing_label = ", ".join(missing) or "HTTP/SOCKS"
+        raise RuntimeError(f"Ядро не открыло локальные proxy-inbound вовремя: {missing_label}.")
 
     def _wait_for_tun_ready(
         self,

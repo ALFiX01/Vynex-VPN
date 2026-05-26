@@ -41,9 +41,8 @@ class SubscriptionManager:
             saved_servers.append(saved_server)
             saved_ids.add(saved_server.id)
 
-        previous_server_ids = set(subscription.server_ids)
         subscription.server_ids = [item.id for item in saved_servers]
-        orphan_ids = previous_server_ids - saved_ids
+        orphan_ids = {server.id for server in current_servers} - saved_ids
         if orphan_ids:
             all_servers[:] = [
                 server
@@ -139,15 +138,6 @@ def merge_subscription_servers(old: list[ServerEntry], fresh: list[ServerEntry])
         updated.extra.update(server.extra)
         updated.extra.pop("stale", None)
         merged.append(updated)
-
-    for server in old:
-        key = _server_key(server)
-        if key in fresh_by_key:
-            continue
-        stale = ServerEntry.from_dict(server.to_dict())
-        stale.extra = dict(server.extra)
-        stale.extra["stale"] = True
-        merged.append(stale)
 
     return merged
 

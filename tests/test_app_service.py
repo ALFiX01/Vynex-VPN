@@ -5,11 +5,17 @@ from unittest.mock import Mock, patch
 from vynex_vpn_client.app_service import (
     VynexAppService,
     VynexServiceDependencies,
-    WinwsConflictError,
 )
 from vynex_vpn_client import app_service as app_service_module
 from vynex_vpn_client.healthcheck import HealthcheckResult
-from vynex_vpn_client.models import AppSettings, RuntimeState, ServerEntry, SubscriptionEntry
+from vynex_vpn_client.models import (
+    AppSettings,
+    LocalProxyCredentials,
+    ProxyRuntimeSession,
+    RuntimeState,
+    ServerEntry,
+    SubscriptionEntry,
+)
 from vynex_vpn_client.process_manager import State as ProcessState
 from vynex_vpn_client.routing_profiles import RoutingProfile
 from vynex_vpn_client.tcp_ping import TcpPingResult
@@ -339,20 +345,25 @@ def test_service_delete_active_server_requires_disconnect_confirmation() -> None
     storage.delete_server.assert_not_called()
 
 
-def test_service_connect_reports_winws_conflict_without_prompting() -> None:
+def test_service_connect_allows_winws_conflict_without_termination() -> None:
     service, _, process_manager = _service_with_mocks()
     conflicts = [RunningProcessDetails(pid=101, name="Winws.exe")]
+    progress_steps: list[str] = []
 
-    with patch("vynex_vpn_client.app_service.list_running_processes_by_names", return_value=conflicts):
-        try:
-            service.connect("server-1")
-        except WinwsConflictError as exc:
-            assert exc.conflicts == tuple(conflicts)
-            assert "Winws.exe" in str(exc)
-        else:
-            raise AssertionError("Expected WinwsConflictError")
+    with (
+        patch("vynex_vpn_client.app_service.list_running_processes_by_names", return_value=conflicts),
+        patch("vynex_vpn_client.app_service.terminate_running_processes") as terminate_processes,
+        patch("vynex_vpn_client.app_service.pick_random_port", side_effect=[18080, 18081]),
+        patch("vynex_vpn_client.app_service.generate_random_username", return_value="user"),
+        patch("vynex_vpn_client.app_service.generate_random_password", return_value="pass"),
+        patch("vynex_vpn_client.app_service.is_port_available", return_value=False),
+    ):
+        result = service.connect("server-1", progress_callback=progress_steps.append)
 
-    process_manager.start.assert_not_called()
+    assert result.state.pid == 1234
+    process_manager.start.assert_called()
+    terminate_processes.assert_not_called()
+    assert "Запуск ядра подключения" in progress_steps
 
 
 def test_service_connect_proxy_starts_backend_and_saves_runtime_state() -> None:
@@ -365,7 +376,7 @@ def test_service_connect_proxy_starts_backend_and_saves_runtime_state() -> None:
         patch("vynex_vpn_client.app_service.pick_random_port", side_effect=[18080, 18081]),
         patch("vynex_vpn_client.app_service.generate_random_username", return_value="user"),
         patch("vynex_vpn_client.app_service.generate_random_password", return_value="pass"),
-        patch("vynex_vpn_client.app_service.wait_for_port_listener", return_value=True),
+        patch("vynex_vpn_client.app_service.is_port_available", return_value=False),
     ):
         result = service.connect(server.id, progress_callback=progress_steps.append)
 
@@ -378,6 +389,26 @@ def test_service_connect_proxy_starts_backend_and_saves_runtime_state() -> None:
     storage.save_runtime_state.assert_called()
     assert "Запуск ядра подключения" in progress_steps
     service.health_checker.verify_proxy.assert_called_once_with(http_port=18080)
+
+
+def test_service_waits_for_proxy_ports_in_single_poll_loop() -> None:
+    service, _, process_manager = _service_with_mocks()
+    session = ProxyRuntimeSession(
+        socks_port=18081,
+        http_port=18080,
+        socks_credentials=LocalProxyCredentials(username="user", password="pass"),
+    )
+
+    with patch("vynex_vpn_client.app_service.is_port_available", side_effect=[False, False]) as port_available:
+        service._wait_for_local_proxy_ready(
+            pid=1234,
+            proxy_session=session,
+            mode="PROXY",
+            backend_id="xray",
+        )
+
+    assert [call.args[0] for call in port_available.call_args_list] == [18080, 18081]
+    process_manager.is_running.assert_not_called()
 
 
 def test_service_run_tcp_ping_persists_results() -> None:

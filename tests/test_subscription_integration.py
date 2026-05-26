@@ -232,10 +232,10 @@ def test_fetch_subscription_servers_uses_v2rayn_user_agent() -> None:
     response.raise_for_status.assert_called_once_with()
 
 
-def test_merge_subscription_servers_preserves_custom_name_and_marks_stale() -> None:
+def test_merge_subscription_servers_preserves_custom_name_and_drops_removed_servers() -> None:
     old = [
         _make_server("Мой сервер", extra={"id": "id-1", "custom_name": True}),
-        _make_server("Old stale", host="stale.example.com", extra={"id": "id-2"}),
+        _make_server("Removed", host="removed.example.com", extra={"id": "id-2"}),
     ]
     fresh = [
         _make_server("Server #1", extra={"id": "id-1", "sni": "example.com"}),
@@ -244,11 +244,10 @@ def test_merge_subscription_servers_preserves_custom_name_and_marks_stale() -> N
     merged = merge_subscription_servers(old, fresh)
 
     active = next(server for server in merged if server.extra.get("id") == "id-1")
-    stale = next(server for server in merged if server.extra.get("id") == "id-2")
 
+    assert len(merged) == 1
     assert active.name == "Мой сервер"
     assert active.extra["sni"] == "example.com"
-    assert stale.extra["stale"] is True
 
 
 def test_app_detects_json_bundle_for_manual_import() -> None:
@@ -269,7 +268,7 @@ def test_app_detects_json_bundle_for_manual_import() -> None:
     assert len(parsed) == 1
 
 
-def test_subscription_manager_updates_subscription_server_ids_with_stale_entries() -> None:
+def test_subscription_manager_removes_servers_missing_from_refreshed_subscription() -> None:
     storage = Mock()
     subscription = SubscriptionEntry.new(url="https://example.com/sub", title="Example")
     subscription.id = "sub-1"
@@ -281,18 +280,31 @@ def test_subscription_manager_updates_subscription_server_ids_with_stale_entries
         _make_server("New", extra={"id": "id-1"}),
     ]
     storage.load_servers.return_value = old
-    storage.upsert_servers.side_effect = lambda servers, **kwargs: list(servers)
+
+    def upsert_servers(servers: list[ServerEntry], **kwargs: object) -> list[ServerEntry]:
+        existing_servers = kwargs["existing_servers"]
+        for server in servers:
+            for index, existing in enumerate(existing_servers):
+                if existing.id == server.id:
+                    existing_servers[index] = server
+                    break
+            else:
+                existing_servers.append(server)
+        return list(servers)
+
+    storage.upsert_servers.side_effect = upsert_servers
     manager = SubscriptionManager(storage)
 
     imported = manager.import_subscription_servers(subscription, fresh)
 
-    assert len(imported) == 2
-    assert len(subscription.server_ids) == 2
-    assert any(server.extra.get("stale") for server in imported)
+    assert len(imported) == 1
+    assert subscription.server_ids == [imported[0].id]
     storage.load_servers.assert_called_once_with()
     storage.upsert_servers.assert_called_once()
     storage.upsert_server.assert_not_called()
-    storage.save_servers.assert_called_once_with(old)
+    saved_servers = storage.save_servers.call_args.args[0]
+    assert len(saved_servers) == 1
+    assert saved_servers[0].extra.get("id") == "id-1"
 
 
 def test_refresh_all_only_updates_auto_update_subscriptions() -> None:

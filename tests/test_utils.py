@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import socket
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import psutil
 
 from vynex_vpn_client.utils import _powershell_utf8_command
-from vynex_vpn_client.utils import RunningProcessDetails, terminate_running_processes
+from vynex_vpn_client.utils import RunningProcessDetails, terminate_running_processes, wait_for_tun_interface_details
 
 
 def test_powershell_utf8_command_forces_utf8_io() -> None:
@@ -58,3 +60,29 @@ def test_terminate_running_processes_reports_failure_when_taskkill_does_not_stop
     assert run.call_count == 2
     assert run.call_args_list[0].args[0] == ["taskkill", "/PID", str(process_info.pid), "/T"]
     assert run.call_args_list[1].args[0] == ["taskkill", "/PID", str(process_info.pid), "/T", "/F"]
+
+
+def test_wait_for_tun_interface_details_uses_fast_psutil_path() -> None:
+    with (
+        patch(
+            "vynex_vpn_client.utils.psutil.net_if_stats",
+            return_value={"VynexTun": SimpleNamespace(isup=True)},
+        ),
+        patch(
+            "vynex_vpn_client.utils.psutil.net_if_addrs",
+            return_value={
+                "VynexTun": [
+                    SimpleNamespace(family=socket.AF_INET, address="169.254.10.5"),
+                ],
+            },
+        ),
+        patch("vynex_vpn_client.utils.socket.if_nametoindex", return_value=17),
+        patch("vynex_vpn_client.utils.get_interface_details") as slow_details,
+    ):
+        details = wait_for_tun_interface_details("vynextun", timeout=0.0)
+
+    assert details is not None
+    assert details.alias == "VynexTun"
+    assert details.index == 17
+    assert details.ipv4 == "169.254.10.5"
+    slow_details.assert_not_called()

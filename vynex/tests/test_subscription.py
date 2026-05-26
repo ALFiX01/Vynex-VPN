@@ -209,7 +209,7 @@ def test_merge_preserves_custom_name() -> None:
     assert merged[0].extra["sni"] == "example.com"
 
 
-def test_merge_marks_stale() -> None:
+def test_merge_drops_removed_servers() -> None:
     old = [
         _make_server("First", uuid="id-1"),
         _make_server("Second", uuid="id-2"),
@@ -217,10 +217,9 @@ def test_merge_marks_stale() -> None:
     fresh = [_make_server("First Updated", uuid="id-1")]
 
     merged = merge_servers(old, fresh)
-    stale = next(server for server in merged if server.uuid == "id-2")
 
-    assert len(merged) == 2
-    assert stale.extra["stale"] is True
+    assert len(merged) == 1
+    assert merged[0].uuid == "id-1"
 
 
 def test_fetch_sets_user_agent() -> None:

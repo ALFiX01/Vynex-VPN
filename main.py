@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import ctypes
 import importlib
+import logging
 import os
 import subprocess
 import sys
 from pathlib import Path
 
 from vynex_vpn_client.constants import APP_NAME, APP_VERSION
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _project_venv_python() -> Path | None:
@@ -24,7 +28,8 @@ def _is_running_as_admin() -> bool:
         return False
     try:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except Exception:
+    except (AttributeError, OSError):
+        LOGGER.exception("Failed to check Windows administrator status.")
         return False
 
 
@@ -129,8 +134,8 @@ def _set_console_title() -> None:
     title = f"{APP_NAME} v{APP_VERSION}"
     try:
         ctypes.windll.kernel32.SetConsoleTitleW(title)
-    except Exception:
-        pass
+    except (AttributeError, OSError):
+        LOGGER.exception("Failed to set console title.")
 
 
 def _set_console_window_size() -> None:
@@ -139,9 +144,21 @@ def _set_console_window_size() -> None:
     from vynex_vpn_client.constants import DEFAULT_CONSOLE_COLUMNS, DEFAULT_CONSOLE_LINES
 
     try:
-        os.system(f"mode con cols={DEFAULT_CONSOLE_COLUMNS} lines={DEFAULT_CONSOLE_LINES} > nul")
-    except Exception:
-        pass
+        subprocess.run(
+            [
+                "cmd",
+                "/c",
+                "mode",
+                "con",
+                f"cols={DEFAULT_CONSOLE_COLUMNS}",
+                f"lines={DEFAULT_CONSOLE_LINES}",
+            ],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        LOGGER.exception("Failed to set console window size.")
 
 
 def main() -> int:

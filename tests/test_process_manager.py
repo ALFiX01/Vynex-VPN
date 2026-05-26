@@ -164,13 +164,14 @@ def test_port_busy_by_xray_is_killed(tmp_path) -> None:
     sock = Mock()
     sock.__enter__ = Mock(return_value=sock)
     sock.__exit__ = Mock(return_value=False)
-    sock.connect_ex.return_value = 0
+    sock.connect_ex.side_effect = [0, 1]
     connection = SimpleNamespace(
         laddr=SimpleNamespace(ip="127.0.0.1", port=10808),
         pid=999,
     )
     process = Mock()
     process.name.return_value = "xray.exe"
+    process.wait.return_value = None
 
     with (
         patch("vynex_vpn_client.process_manager.atexit.register"),

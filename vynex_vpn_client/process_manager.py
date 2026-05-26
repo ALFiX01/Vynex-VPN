@@ -63,7 +63,6 @@ def _build_process_logger(name: str, path: Path) -> logging.Logger:
 
 
 class _BaseProcessManager:
-    STARTUP_GRACE_PERIOD = 1.5
     STOP_TIMEOUT_SECONDS = 5.0
     OUTPUT_TAIL_LIMIT = 120
 
@@ -131,7 +130,6 @@ class _BaseProcessManager:
             ) from exc
         self._register_process(process)
         try:
-            time.sleep(self.STARTUP_GRACE_PERIOD)
             if process.poll() is not None:
                 self._wait_for_threads(timeout=0.5)
                 error_message = self._read_last_log_lines()
@@ -161,6 +159,9 @@ class _BaseProcessManager:
         self._finalize_process()
 
     def is_running(self, pid: int | None) -> bool:
+        managed_process = self._managed_process_for_pid(pid) if pid else None
+        if managed_process is not None:
+            return managed_process.poll() is None
         return bool(pid and is_process_running(pid) and self._is_target_pid(pid))
 
     def ensure_no_running_instances(self, *, exclude_pid: int | None = None) -> None:
@@ -174,44 +175,24 @@ class _BaseProcessManager:
         raise RuntimeError(self._format_running_instances_error(running_instances))
 
     def list_running_instances(self) -> list[ProcessInstanceInfo]:
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        result = subprocess.run(
-            [
-                "powershell",
-                "-NoProfile",
-                "-Command",
-                f"Get-CimInstance Win32_Process -Filter \"Name='{self._process_image_name}'\" | "
-                "Select-Object ProcessId, ExecutablePath | ConvertTo-Csv -NoTypeInformation",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-            creationflags=creationflags,
-        )
-        if result.returncode != 0:
-            self._logger.warning(
-                "Failed to enumerate %s processes, return code %s",
-                self._process_image_name,
-                result.returncode,
-            )
-            return []
-        lines = [line for line in result.stdout.splitlines() if line.strip()]
-        if len(lines) <= 1:
-            return []
         instances: list[ProcessInstanceInfo] = []
-        for row in csv.DictReader(lines):
-            raw_pid = (row.get("ProcessId") or "").strip()
-            if not raw_pid.isdigit():
+        expected_name = self._process_image_name.casefold()
+        for process in psutil.process_iter(["pid", "name", "exe"]):
+            try:
+                raw_name = str(process.info.get("name") or "").strip()
+                if raw_name.casefold() != expected_name:
+                    continue
+                raw_pid = int(process.info["pid"])
+                raw_path = str(process.info.get("exe") or "").strip() or None
+            except (KeyError, TypeError, ValueError, psutil.Error, OSError):
                 continue
-            raw_path = (row.get("ExecutablePath") or "").strip() or None
             instances.append(
                 ProcessInstanceInfo(
-                    pid=int(raw_pid),
+                    pid=raw_pid,
                     executable_path=self._normalize_path(raw_path),
                 )
             )
+        instances.sort(key=lambda item: item.pid)
         return instances
 
     def read_recent_output(self, limit: int = 15) -> str:
@@ -599,44 +580,24 @@ class XrayProcessManager(_BaseProcessManager):
         raise RuntimeError(self._format_running_instances_error(running_instances))
 
     def list_running_instances(self) -> list[ProcessInstanceInfo]:
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        result = subprocess.run(
-            [
-                "powershell",
-                "-NoProfile",
-                "-Command",
-                f"Get-CimInstance Win32_Process -Filter \"Name='{self._process_image_name}'\" | "
-                "Select-Object ProcessId, ExecutablePath | ConvertTo-Csv -NoTypeInformation",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-            creationflags=creationflags,
-        )
-        if result.returncode != 0:
-            self._logger.warning(
-                "Failed to enumerate %s processes, return code %s",
-                self._process_image_name,
-                result.returncode,
-            )
-            return []
-        lines = [line for line in result.stdout.splitlines() if line.strip()]
-        if len(lines) <= 1:
-            return []
         instances: list[ProcessInstanceInfo] = []
-        for row in csv.DictReader(lines):
-            raw_pid = (row.get("ProcessId") or "").strip()
-            if not raw_pid.isdigit():
+        expected_name = self._process_image_name.casefold()
+        for process in psutil.process_iter(["pid", "name", "exe"]):
+            try:
+                raw_name = str(process.info.get("name") or "").strip()
+                if raw_name.casefold() != expected_name:
+                    continue
+                raw_pid = int(process.info["pid"])
+                raw_path = str(process.info.get("exe") or "").strip() or None
+            except (KeyError, TypeError, ValueError, psutil.Error, OSError):
                 continue
-            raw_path = (row.get("ExecutablePath") or "").strip() or None
             instances.append(
                 ProcessInstanceInfo(
-                    pid=int(raw_pid),
+                    pid=raw_pid,
                     executable_path=self._normalize_path(raw_path),
                 )
             )
+        instances.sort(key=lambda item: item.pid)
         return instances
 
     def read_recent_output(self, limit: int = 15) -> str:
@@ -696,8 +657,6 @@ class XrayProcessManager(_BaseProcessManager):
         with self._lock:
             self._proc = proc
             self._stderr_thread = stderr_thread
-
-        time.sleep(1.0)
 
         with self._lock:
             if self._proc is not proc:
@@ -837,12 +796,8 @@ class XrayProcessManager(_BaseProcessManager):
         return False
 
     def _check_port(self, port: int) -> bool:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.settimeout(0.25)
-                busy = sock.connect_ex(("127.0.0.1", port)) == 0
-        except OSError:
-            self._logger.exception("Failed to probe local port %s", port)
+        busy = self._is_local_port_busy(port)
+        if busy is None:
             return False
 
         if not busy:
@@ -866,12 +821,38 @@ class XrayProcessManager(_BaseProcessManager):
         try:
             self._logger.warning("Killing stale xray.exe pid=%s on port %s", proc.pid, port)
             proc.kill()
+            proc.wait(timeout=1.0)
         except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
             self._logger.exception("Failed to kill stale xray.exe on port %s", port)
             return False
+        except psutil.TimeoutExpired:
+            self._logger.warning("Stale xray.exe pid=%s did not exit after kill", proc.pid)
+            return False
 
-        time.sleep(1.0)
-        return True
+        return self._wait_for_local_port_available(port, timeout=1.0)
+
+    def _is_local_port_busy(self, port: int) -> bool | None:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(0.25)
+                return sock.connect_ex(("127.0.0.1", port)) == 0
+        except OSError:
+            self._logger.exception("Failed to probe local port %s", port)
+            return None
+
+    def _wait_for_local_port_available(self, port: int, *, timeout: float) -> bool:
+        deadline = time.monotonic() + max(timeout, 0.0)
+        while True:
+            busy = self._is_local_port_busy(port)
+            if busy is False:
+                return True
+            if busy is None:
+                return False
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self._logger.warning("Port %s is still busy after stale xray.exe was killed", port)
+                return False
+            time.sleep(min(0.05, remaining))
 
     def _find_process_by_port(self, port: int) -> psutil.Process | None:
         try:

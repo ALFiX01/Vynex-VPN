@@ -21,6 +21,7 @@ TEXT_BASE = "15px"
 TEXT_LG = "17px"
 TEXT_XL = "20px"
 TEXT_2XL = "24px"
+TEXT_PAGER = "28px"
 
 LINE_XS = "16px"
 LINE_SM = "18px"
@@ -30,58 +31,58 @@ LINE_XL = "28px"
 LINE_2XL = "32px"
 
 RADIUS_SM = "4px"
-RADIUS_MD = "8px"
-RADIUS_LG = "12px"
+RADIUS_MD = "6px"
+RADIUS_LG = "8px"
 
 DURATION_FAST_MS = 120
 DURATION_BASE_MS = 200
 EASING_STANDARD = "cubic-bezier(0.4, 0, 0.2, 1)"
 
-COLOR_BG = "#0B111A"
-COLOR_BG_SIDEBAR = COLOR_BG
-COLOR_SURFACE = "#111827"
+COLOR_BG = "#0B0F14"
+COLOR_BG_SIDEBAR = "#090D12"
+COLOR_SURFACE = "#121923"
 COLOR_SURFACE_ALT = "#0F1724"
-COLOR_SURFACE_MUTED = COLOR_SURFACE_ALT
-COLOR_SURFACE_HOVER = "#17233A"
-COLOR_SURFACE_ACTIVE = COLOR_SURFACE_ALT
-COLOR_BORDER = "#26364D"
-COLOR_BORDER_MUTED = COLOR_BORDER
-COLOR_BORDER_STRONG = "#5E7DFF"
+COLOR_SURFACE_MUTED = "#141A22"
+COLOR_SURFACE_HOVER = "#1A2530"
+COLOR_SURFACE_ACTIVE = "#101820"
+COLOR_BORDER = "#263241"
+COLOR_BORDER_MUTED = "#1F2935"
+COLOR_BORDER_STRONG = "#3F6E8D"
 
-COLOR_TEXT_PRIMARY = "#F8FAFC"
-COLOR_TEXT_SECONDARY = "#CBD5E1"
-COLOR_TEXT_MUTED = "#94A3B8"
-COLOR_TEXT_DISABLED = COLOR_TEXT_MUTED
+COLOR_TEXT_PRIMARY = "#F4F7FB"
+COLOR_TEXT_SECONDARY = "#D3DCE7"
+COLOR_TEXT_MUTED = "#9EADBD"
+COLOR_TEXT_DISABLED = "#6F7E8E"
 COLOR_TEXT_INVERSE = COLOR_TEXT_PRIMARY
 
-COLOR_PRIMARY = "#3862F6"
-COLOR_PRIMARY_HOVER = "#4F75FF"
-COLOR_PRIMARY_ACTIVE = "#1D4ED8"
-COLOR_PRIMARY_MUTED = "#17233A"
-COLOR_PRIMARY_SOFT = "#7EA0FF"
-COLOR_PRIMARY_BORDER = "#5E7DFF"
-COLOR_FOCUS = "#7EA0FF"
-COLOR_SELECTION = COLOR_PRIMARY_ACTIVE
+COLOR_PRIMARY = "#2F7DB8"
+COLOR_PRIMARY_HOVER = "#3C92D0"
+COLOR_PRIMARY_ACTIVE = "#23618F"
+COLOR_PRIMARY_MUTED = "#14283A"
+COLOR_PRIMARY_SOFT = "#7DB7E0"
+COLOR_PRIMARY_BORDER = "#4F97C5"
+COLOR_FOCUS = "#86C5EA"
+COLOR_SELECTION = "#1F5E86"
 
-COLOR_SUCCESS = "#22C55E"
-COLOR_SUCCESS_BG = "#123726"
-COLOR_SUCCESS_BORDER = "#1F6A42"
-COLOR_WARNING = "#FACC15"
-COLOR_WARNING_BG = "#3A3014"
-COLOR_WARNING_BORDER = "#705D20"
-COLOR_DANGER = "#EF4444"
-COLOR_DANGER_BG = "#3B1820"
-COLOR_DANGER_BORDER = "#74303D"
-COLOR_INFO = COLOR_PRIMARY_SOFT
-COLOR_INFO_BG = "#172334"
-COLOR_INFO_BORDER = "#2B415F"
+COLOR_SUCCESS = "#4CC38A"
+COLOR_SUCCESS_BG = "#102C23"
+COLOR_SUCCESS_BORDER = "#2D7657"
+COLOR_WARNING = "#E6B84A"
+COLOR_WARNING_BG = "#342814"
+COLOR_WARNING_BORDER = "#7A6126"
+COLOR_DANGER = "#F06B6B"
+COLOR_DANGER_BG = "#351A1E"
+COLOR_DANGER_BORDER = "#824147"
+COLOR_INFO = "#7DB7E0"
+COLOR_INFO_BG = "#132738"
+COLOR_INFO_BORDER = "#345B78"
 
-CONTROL_HEIGHT = 36
-CONTROL_HEIGHT_COMPACT = 32
-CHIP_HEIGHT = 28
-PAGER_SIZE = 28
-TABLE_ROW_HEIGHT = 36
-SERVERS_TABLE_ROW_HEIGHT = 44
+CONTROL_HEIGHT = 34
+CONTROL_HEIGHT_COMPACT = 30
+CHIP_HEIGHT = 24
+PAGER_SIZE = 30
+TABLE_ROW_HEIGHT = 34
+SERVERS_TABLE_ROW_HEIGHT = 42
 SERVER_TABLE_CHECK_COLUMN_WIDTH = 48
 SERVER_TABLE_PROTOCOL_COLUMN_WIDTH = 120
 SERVER_TABLE_PROTOCOL_BADGE_MIN_WIDTH = 88
@@ -92,11 +93,11 @@ ICON_SIZE_MD = 20
 ICON_SIZE_LG = 24
 ICON_SIZE_XL = 36
 BUTTON_MIN_WIDTH = 96
-SERVER_SELECTION_CARD_HEIGHT = 80
-CONNECTION_SERVER_LIST_VISIBLE_ROWS = 2
+SERVER_SELECTION_CARD_HEIGHT = 60
+CONNECTION_SERVER_LIST_VISIBLE_ROWS = 4
 CONNECTION_SERVER_LIST_HEIGHT = (
     SERVER_SELECTION_CARD_HEIGHT * CONNECTION_SERVER_LIST_VISIBLE_ROWS
-    + SPACE_2 * (CONNECTION_SERVER_LIST_VISIBLE_ROWS - 1)
+    + SPACE_1 * (CONNECTION_SERVER_LIST_VISIBLE_ROWS - 1)
 )
 
 SHADOW_SM = "none"
@@ -120,6 +121,7 @@ def app_stylesheet() -> str:
         "text_lg": TEXT_LG,
         "text_xl": TEXT_XL,
         "text_2xl": TEXT_2XL,
+        "text_pager": TEXT_PAGER,
         "line_xs": LINE_XS,
         "line_sm": LINE_SM,
         "line_base": LINE_BASE,
@@ -212,8 +214,6 @@ QFrame#Toolbar,
 QFrame#ServersSearchBar,
 QFrame#ServersImportBar,
 QFrame#ServersActionBar,
-QFrame#ServersSecondaryBar,
-QFrame#ServersActionsBar,
 QFrame#ServersFooter {
     background: transparent;
     border: 0;
@@ -223,12 +223,16 @@ QFrame#Sidebar {
     background: %(bg_sidebar)s;
     border-right: 1px solid %(border)s;
 }
+QFrame#SidebarOperationPanel {
+    background: %(surface_alt)s;
+    border: 1px solid %(border_muted)s;
+    border-radius: %(radius_md)s;
+}
 QFrame#Panel,
 QFrame#TableSurface,
 QFrame#ServersSearchCard,
-QFrame#ServersBestCard,
-QFrame#ServersBestBar,
 QFrame#EmptyState,
+QFrame#ServerDetailsPanel,
 QFrame#ServerSelectionCard {
     background: %(surface)s;
     border: 1px solid %(border)s;
@@ -236,11 +240,23 @@ QFrame#ServerSelectionCard {
 }
 QFrame#TableSurface {
     background: %(surface_alt)s;
+    border-color: %(border_muted)s;
 }
 QFrame#ConnectionHero {
     background: %(surface)s;
     border: 1px solid %(border_strong)s;
     border-radius: %(radius_md)s;
+}
+QFrame#ConnectionRouteCard {
+    background: %(surface_alt)s;
+    border: 1px solid %(border_muted)s;
+    border-radius: %(radius_md)s;
+}
+QWidget#ConnectionRouteMetric {
+    background: %(surface)s;
+    border: 1px solid %(border_muted)s;
+    border-radius: %(radius_sm)s;
+    min-height: %(control_height)s;
 }
 QScrollArea#ConnectionServerScroll,
 QWidget#ConnectionServerViewport,
@@ -250,7 +266,7 @@ QWidget#ConnectionServerList {
 }
 QFrame#ServerSelectionCard:hover {
     background: %(surface_hover)s;
-    border-color: %(primary)s;
+    border-color: %(primary_border)s;
 }
 QFrame#ServerSelectionCard[state="selected"] {
     background: %(primary_muted)s;
@@ -260,6 +276,21 @@ QFrame#ServerSelectionCard:disabled {
     background: %(surface_muted)s;
     border-color: %(border_muted)s;
 }
+QScrollArea#ServerDetailsScroll,
+QWidget#ServerDetailsViewport,
+QWidget#ServerDetailsBody {
+    background: transparent;
+    border: 0;
+}
+QWidget#ServerDetailCell {
+    background: %(surface_alt)s;
+    border: 1px solid %(border_muted)s;
+    border-radius: %(radius_md)s;
+}
+QWidget#ServerDetailCell:hover {
+    background: %(surface_hover)s;
+    border-color: %(border_strong)s;
+}
 QLabel#AppTitle {
     background: transparent;
     color: %(text_primary)s;
@@ -267,9 +298,33 @@ QLabel#AppTitle {
     font-weight: 700;
     line-height: %(line_xl)s;
 }
+QLabel#SidebarOperationTitle {
+    background: transparent;
+    color: %(primary_soft)s;
+    font-size: %(text_xs)s;
+    font-weight: 800;
+    line-height: %(line_xs)s;
+}
+QLabel#SidebarOperationMessage {
+    background: transparent;
+    color: %(text_secondary)s;
+    font-size: %(text_xs)s;
+    line-height: %(line_xs)s;
+}
+QProgressBar#SidebarOperationProgress {
+    background: %(surface_muted)s;
+    border: 0;
+    border-radius: 2px;
+    max-height: %(space_1)s;
+    min-height: %(space_1)s;
+}
+QProgressBar#SidebarOperationProgress::chunk {
+    background: %(primary)s;
+    border-radius: 2px;
+}
 QLabel#ConnectionServerCount {
     background: transparent;
-    color: %(text_muted)s;
+    color: %(text_secondary)s;
     font-size: %(text_xs)s;
     line-height: %(line_xs)s;
 }
@@ -281,23 +336,16 @@ QListWidget#Navigation {
 }
 QListWidget#Navigation::item {
     border-radius: %(radius_md)s;
-    min-height: %(control_compact_height)s;
-    padding: %(space_2)s %(space_3)s;
+    min-height: %(space_7)s;
+    padding: %(space_1)s %(space_3)s;
 }
 QListWidget#Navigation::item:selected {
-    background: %(primary)s;
+    background: %(selection)s;
     color: %(text_inverse)s;
 }
 QListWidget#Navigation::item:hover {
-    background: %(primary_muted)s;
+    background: %(surface_hover)s;
     color: %(text_primary)s;
-}
-QLabel#HeaderTitle {
-    background: transparent;
-    color: %(text_primary)s;
-    font-size: %(text_lg)s;
-    font-weight: 700;
-    line-height: %(line_lg)s;
 }
 QLabel#PageTitle {
     background: transparent;
@@ -306,49 +354,52 @@ QLabel#PageTitle {
     font-weight: 700;
     line-height: %(line_2xl)s;
 }
-QWidget#ServersPage QLabel#PageTitle {
-    font-size: %(text_xl)s;
-    font-weight: 700;
-    line-height: %(line_xl)s;
-}
 QLabel#PageSubtitle,
 QLabel#ConnectionStatusDetail,
 QLabel#ConnectionServerMeta,
 QLabel#EmptyText {
     background: transparent;
-    color: %(text_muted)s;
+    color: %(text_secondary)s;
     font-size: %(text_sm)s;
     line-height: %(line_sm)s;
 }
 QLabel#BestServerCaption,
 QLabel#FieldCaption,
 QLabel#PanelTitle,
-QLabel#HeroMetricCaption {
+QLabel#HeroMetricCaption,
+QLabel#ConnectionRouteCaption {
     background: transparent;
     color: %(text_muted)s;
-    font-size: %(text_sm)s;
+    font-size: %(text_xs)s;
     font-weight: 600;
-    line-height: %(line_sm)s;
+    line-height: %(line_xs)s;
 }
 QLabel#BestServerName,
 QLabel#FieldValue,
 QLabel#EmptyTitle,
 QLabel#ConnectionServerTitle,
-QLabel#HeroMetricValue {
+QLabel#HeroMetricValue,
+QLabel#ConnectionRouteValue {
     background: transparent;
     color: %(text_primary)s;
-    font-size: %(text_base)s;
+    font-size: %(text_sm)s;
     font-weight: 700;
-    line-height: %(line_base)s;
+    line-height: %(line_sm)s;
 }
 QLabel#ConnectionStatusBadge {
     background: transparent;
     color: %(text_primary)s;
-    font-size: %(text_2xl)s;
+    font-size: %(text_xl)s;
     font-weight: 800;
-    line-height: %(line_2xl)s;
-    min-height: %(space_8)s;
+    line-height: %(line_xl)s;
+    min-height: %(space_7)s;
     padding: %(space_0)s;
+}
+QLabel#ConnectionServerTitle {
+    font-size: %(text_lg)s;
+    font-weight: 800;
+    line-height: %(line_lg)s;
+    min-height: %(space_6)s;
 }
 QLabel#ConnectionStatusBadge[state="connected"] {
     color: %(success)s;
@@ -359,15 +410,18 @@ QLabel#ConnectionStatusBadge[state="busy"] {
 QLabel#ConnectionStatusBadge[state="error"] {
     color: %(danger)s;
 }
+QLabel#ConnectionStatusBadge[state="disconnected"] {
+    color: %(warning)s;
+}
 QFrame#HeroSeparator,
 QFrame#HeroMetricDivider {
-    background: %(border)s;
+    background: %(border_muted)s;
     border: 0;
 }
 QWidget#HeroMetric {
     background: transparent;
     border: 0;
-    min-height: %(space_12)s;
+    min-height: %(control_height)s;
 }
 QLabel#HeroMetricIcon {
     background: transparent;
@@ -382,7 +436,7 @@ QLabel#HeroMetricIcon {
 }
 QLabel#ServerCardIcon {
     background: %(primary_muted)s;
-    border: 1px solid %(border_strong)s;
+    border: 1px solid %(primary_border)s;
     border-radius: %(radius_md)s;
     color: %(primary_soft)s;
     font-size: %(text_base)s;
@@ -396,7 +450,7 @@ QLabel#ServerCardTitle {
 }
 QLabel#ServerCardMeta {
     background: transparent;
-    color: %(text_muted)s;
+    color: %(text_secondary)s;
     font-size: %(text_xs)s;
 }
 QLabel#BestPingBadge,
@@ -429,13 +483,17 @@ QLabel#ProtocolBadge[state="other"] {
     color: %(primary_soft)s;
 }
 QLabel#SourceBadge[state="manual"],
-QLabel#SourceBadge[state="subscription"],
 QLabel#BestPingBadge[state="unknown"],
 QLabel#PingBadge[state="unknown"],
 QLabel#StatusPill[state="unknown"] {
     background: %(surface_alt)s;
     border-color: %(border)s;
-    color: %(text_muted)s;
+    color: %(text_secondary)s;
+}
+QLabel#SourceBadge[state="subscription"] {
+    background: %(info_bg)s;
+    border-color: %(info_border)s;
+    color: %(info)s;
 }
 QLabel#BestPingBadge,
 QLabel#BestPingBadge[state="ok"],
@@ -473,10 +531,21 @@ QLabel#ServerCardSelected {
     border-color: %(primary_border)s;
     color: %(text_inverse)s;
 }
-QLabel#ConnectionServerEmpty {
+QFrame#ConnectionServerEmpty {
     background: %(surface)s;
     border: 1px solid %(border)s;
     border-radius: %(radius_md)s;
+}
+QLabel#ConnectionServerEmptyTitle {
+    background: transparent;
+    border: 0;
+    color: %(text_primary)s;
+    font-size: %(text_base)s;
+    font-weight: 800;
+}
+QLabel#ConnectionServerEmptyText {
+    background: transparent;
+    border: 0;
     color: %(text_muted)s;
     font-size: %(text_sm)s;
 }
@@ -506,11 +575,11 @@ QPushButton {
     color: %(text_primary)s;
     font-weight: 600;
     min-height: %(control_height)s;
-    padding: %(space_2)s %(space_3)s;
+    padding: %(space_1)s %(space_3)s;
 }
 QPushButton:hover {
     background: %(surface_hover)s;
-    border-color: %(primary)s;
+    border-color: %(primary_border)s;
     color: %(text_inverse)s;
 }
 QPushButton:pressed {
@@ -525,19 +594,68 @@ QPushButton:disabled {
     border-color: %(border_muted)s;
     color: %(text_disabled)s;
 }
+QPushButton[alignedIconButton="true"] {
+    text-align: left;
+    padding-left: %(space_3)s;
+    padding-right: %(space_3)s;
+}
 QPushButton#PrimaryButton {
     background: %(primary)s;
     border-color: %(primary_border)s;
     color: %(text_inverse)s;
 }
+QPushButton#ConnectionCompactPrimaryButton {
+    background: %(primary)s;
+    border: 1px solid %(primary_border)s;
+    border-radius: %(radius_md)s;
+    color: %(text_inverse)s;
+    font-size: %(text_xs)s;
+    font-weight: 700;
+    min-height: %(control_height)s;
+    padding: %(space_1)s %(space_2)s;
+}
+QPushButton#ConnectionPrimaryButton {
+    background: %(primary)s;
+    border: 1px solid %(primary_border)s;
+    border-radius: %(radius_lg)s;
+    color: %(text_inverse)s;
+    font-size: %(text_lg)s;
+    font-weight: 800;
+    min-height: %(space_7)s;
+    padding: %(space_3)s %(space_6)s;
+}
 QPushButton#PrimaryButton:hover {
     background: %(primary_hover)s;
     border-color: %(primary_soft)s;
 }
+QPushButton#ConnectionCompactPrimaryButton:hover {
+    background: %(primary_hover)s;
+    border-color: %(primary_soft)s;
+}
+QPushButton#ConnectionPrimaryButton:hover {
+    background: %(primary_hover)s;
+    border-color: %(focus)s;
+}
 QPushButton#PrimaryButton:pressed {
     background: %(primary_active)s;
 }
+QPushButton#ConnectionCompactPrimaryButton:pressed {
+    background: %(primary_active)s;
+}
+QPushButton#ConnectionPrimaryButton:pressed {
+    background: %(primary_active)s;
+}
 QPushButton#PrimaryButton:disabled {
+    background: %(surface_muted)s;
+    border-color: %(border_muted)s;
+    color: %(text_disabled)s;
+}
+QPushButton#ConnectionCompactPrimaryButton:disabled {
+    background: %(surface_muted)s;
+    border-color: %(border_muted)s;
+    color: %(text_disabled)s;
+}
+QPushButton#ConnectionPrimaryButton:disabled {
     background: %(surface_muted)s;
     border-color: %(border_muted)s;
     color: %(text_disabled)s;
@@ -585,7 +703,7 @@ QPushButton#FavoriteButton:disabled {
     color: %(text_disabled)s;
 }
 QPushButton#SubtleButton {
-    background: %(surface)s;
+    background: %(surface_alt)s;
     border-color: %(border)s;
     color: %(text_secondary)s;
 }
@@ -603,7 +721,22 @@ QPushButton#OutlinedButton {
     border-color: %(primary_border)s;
     color: %(primary_soft)s;
 }
+QPushButton#ConnectionCompactOutlinedButton {
+    background: transparent;
+    border: 1px solid %(primary_border)s;
+    border-radius: %(radius_md)s;
+    color: %(primary_soft)s;
+    font-size: %(text_xs)s;
+    font-weight: 700;
+    min-height: %(control_height)s;
+    padding: %(space_1)s %(space_2)s;
+}
 QPushButton#OutlinedButton:hover {
+    background: %(primary_muted)s;
+    border-color: %(primary_soft)s;
+    color: %(text_inverse)s;
+}
+QPushButton#ConnectionCompactOutlinedButton:hover {
     background: %(primary_muted)s;
     border-color: %(primary_soft)s;
     color: %(text_inverse)s;
@@ -612,18 +745,27 @@ QPushButton#OutlinedButton:pressed {
     background: %(surface_active)s;
     border-color: %(primary)s;
 }
+QPushButton#ConnectionCompactOutlinedButton:pressed {
+    background: %(surface_active)s;
+    border-color: %(primary)s;
+}
 QPushButton#OutlinedButton:disabled {
     background: transparent;
     border-color: %(border_muted)s;
     color: %(text_disabled)s;
 }
+QPushButton#ConnectionCompactOutlinedButton:disabled {
+    background: transparent;
+    border-color: %(border_muted)s;
+    color: %(text_disabled)s;
+}
 QLineEdit, QTextEdit, QComboBox {
-    background: %(bg)s;
+    background: %(surface_alt)s;
     border: 1px solid %(border)s;
     border-radius: %(radius_md)s;
     color: %(text_primary)s;
     min-height: %(control_height)s;
-    padding: %(space_2)s %(space_3)s;
+    padding: %(space_1)s %(space_3)s;
 }
 QLineEdit:hover, QTextEdit:hover, QComboBox:hover {
     border-color: %(border_strong)s;
@@ -694,7 +836,7 @@ QTableWidget::viewport, QTableView::viewport {
 }
 QTableWidget::item, QTableView::item {
     border: 0;
-    padding: %(space_2)s %(space_3)s;
+    padding: %(space_1)s %(space_3)s;
 }
 QTableWidget::item:hover, QTableView::item:hover {
     background: %(surface_hover)s;
@@ -703,17 +845,26 @@ QTableWidget::item:selected, QTableView::item:selected,
 QTableWidget#ServersTable::item:selected {
     background: %(selection)s;
     border: 0;
+    color: %(text_inverse)s;
 }
 QHeaderView::section {
-    background: %(surface)s;
+    background: %(surface_alt)s;
     border: 0;
     border-bottom: 1px solid %(border)s;
-    color: %(text_secondary)s;
+    color: %(text_muted)s;
     font-weight: 700;
     padding: %(space_2)s %(space_3)s;
 }
 QTableWidget#ServersTable::item {
-    border-bottom: 0;
+    border-bottom: 1px solid %(border_muted)s;
+    padding: %(space_1)s %(space_2)s;
+}
+QTableWidget#ServersTable::item:hover {
+    background: %(surface_hover)s;
+}
+QTableWidget#ServersTable::item:selected {
+    background: %(selection)s;
+    color: %(text_inverse)s;
 }
 QTableWidget#ServersTable::indicator {
     width: %(icon_size_sm)s;
@@ -721,51 +872,35 @@ QTableWidget#ServersTable::indicator {
     border-radius: %(radius_sm)s;
     border: 1px solid %(text_disabled)s;
     background: %(bg)s;
+    margin: %(space_1)s;
 }
 QTableWidget#ServersTable::indicator:checked {
     background: %(primary)s;
     border: 1px solid %(primary_soft)s;
     image: none;
 }
-QPushButton#TableActionButton {
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: %(radius_md)s;
-    color: %(text_secondary)s;
-    font-size: %(text_base)s;
-    font-weight: 800;
-    min-height: %(control_compact_height)s;
-    min-width: %(control_compact_height)s;
-    padding: %(space_0)s;
-}
-QPushButton#TableActionButton:hover {
-    background: %(surface_hover)s;
-    border-color: %(primary)s;
-    color: %(text_primary)s;
-}
-QPushButton#TableActionButton:pressed {
-    background: %(surface_active)s;
-}
-QPushButton#TableActionButton:disabled {
-    background: transparent;
-    border-color: transparent;
-    color: %(text_disabled)s;
-}
 QLabel#PagerCurrent {
-    background: %(primary)s;
+    background: %(selection)s;
     border: 1px solid %(primary_border)s;
     border-radius: %(radius_md)s;
     color: %(text_inverse)s;
     font-weight: 800;
+    min-height: %(pager_size)s;
+    min-width: %(pager_size)s;
+    max-height: %(pager_size)s;
+    max-width: %(pager_size)s;
 }
 QPushButton#PagerButton {
-    background: %(surface)s;
+    background: %(surface_alt)s;
     border: 1px solid %(border)s;
     border-radius: %(radius_md)s;
     color: %(text_muted)s;
-    font-size: %(text_base)s;
+    font-size: %(text_pager)s;
     font-weight: 800;
+    min-height: %(pager_size)s;
     min-width: %(pager_size)s;
+    max-height: %(pager_size)s;
+    max-width: %(pager_size)s;
     padding: %(space_0)s;
 }
 QPushButton#PagerButton:hover {
@@ -800,7 +935,7 @@ QScrollBar:horizontal {
     height: %(space_3)s;
 }
 QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-    background: %(border)s;
+    background: %(border_strong)s;
     border-radius: %(radius_md)s;
     min-height: %(space_7)s;
     min-width: %(space_7)s;
@@ -827,7 +962,7 @@ QMenu::item {
     padding: %(space_2)s %(space_5)s;
 }
 QMenu::item:selected {
-    background: %(surface_hover)s;
+    background: %(selection)s;
 }
 QMenu::item:disabled {
     color: %(text_disabled)s;

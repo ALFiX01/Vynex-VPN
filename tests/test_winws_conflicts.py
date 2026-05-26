@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import Mock, patch
 
 from vynex_vpn_client.app import VynexVpnApp
-from vynex_vpn_client.models import ServerEntry
 from vynex_vpn_client.utils import RunningProcessDetails
 
 
@@ -60,7 +59,7 @@ def test_ensure_winws_conflicts_resolved_terminates_processes_after_confirmation
     app._pause.assert_not_called()
 
 
-def test_ensure_winws_conflicts_resolved_cancels_connection_when_user_declines() -> None:
+def test_ensure_winws_conflicts_resolved_continues_when_user_declines() -> None:
     app = _make_app()
     conflicts = _winws_processes()
 
@@ -69,13 +68,13 @@ def test_ensure_winws_conflicts_resolved_cancels_connection_when_user_declines()
         patch("vynex_vpn_client.app.questionary.confirm", return_value=_confirm_prompt(False)),
         patch("vynex_vpn_client.app.terminate_running_processes") as terminate_processes,
     ):
-        assert app._ensure_winws_conflicts_resolved() is False
+        assert app._ensure_winws_conflicts_resolved() is True
 
     terminate_processes.assert_not_called()
-    app._pause.assert_called_once()
+    app._pause.assert_not_called()
 
 
-def test_ensure_winws_conflicts_resolved_raises_when_termination_fails() -> None:
+def test_ensure_winws_conflicts_resolved_continues_when_termination_fails() -> None:
     app = _make_app()
     conflicts = _winws_processes()
 
@@ -84,35 +83,6 @@ def test_ensure_winws_conflicts_resolved_raises_when_termination_fails() -> None
         patch("vynex_vpn_client.app.questionary.confirm", return_value=_confirm_prompt(True)),
         patch("vynex_vpn_client.app.terminate_running_processes", return_value=[conflicts[0]]),
     ):
-        try:
-            app._ensure_winws_conflicts_resolved()
-        except RuntimeError as exc:
-            message = str(exc)
-            assert "Winws.exe" in message
-            assert "PID 101" in message
-        else:
-            raise AssertionError("Expected RuntimeError when Winws.exe cannot be terminated")
+        assert app._ensure_winws_conflicts_resolved() is True
 
-
-def test_connect_flow_stops_before_runtime_setup_when_winws_conflict_is_not_resolved() -> None:
-    app = _make_app()
-    server = ServerEntry.new(
-        name="Test server",
-        protocol="vmess",
-        host="example.com",
-        port=443,
-        raw_link="vmess://test",
-    )
-    selection_prompt = Mock()
-    selection_prompt.ask.return_value = server.id
-    app.storage = Mock()
-    app.storage.load_servers.return_value = [server]
-    app._select = Mock(return_value=selection_prompt)
-    app._validated_settings = Mock()
-    app._ensure_winws_conflicts_resolved = Mock(return_value=False)
-
-    app.connect_flow()
-
-    app._ensure_winws_conflicts_resolved.assert_called_once_with()
-    app._validated_settings.assert_not_called()
-
+    app._pause.assert_not_called()

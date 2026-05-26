@@ -452,7 +452,9 @@ def get_interface_details(
 
 
 def is_tun_interface_ready(interface_name: str, *, require_route: bool = False) -> bool:
-    details = _ready_tun_interface_details(interface_name, require_route=require_route)
+    details = _ready_tun_interface_details_fast(interface_name, require_route=require_route)
+    if details is None:
+        details = _ready_tun_interface_details(interface_name, require_route=require_route)
     return details is not None
 
 
@@ -465,16 +467,68 @@ def wait_for_tun_interface_details(
 ) -> WindowsInterfaceDetails | None:
     deadline = time.monotonic() + timeout
     poll_interval = max(0.05, float(interval))
+    last_slow_probe = 0.0
     while True:
-        details = _ready_tun_interface_details(interface_name, require_route=require_route)
+        details = _ready_tun_interface_details_fast(interface_name, require_route=require_route)
         if details is not None:
             return details
+        now = time.monotonic()
+        if require_route or now - last_slow_probe >= 1.0:
+            last_slow_probe = now
+            details = _ready_tun_interface_details(interface_name, require_route=require_route)
+            if details is not None:
+                return details
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             break
         time.sleep(min(poll_interval, remaining))
         poll_interval = min(poll_interval * 1.5, 0.75)
     return _ready_tun_interface_details(interface_name, require_route=require_route)
+
+
+def _ready_tun_interface_details_fast(
+    interface_name: str,
+    *,
+    require_route: bool,
+) -> WindowsInterfaceDetails | None:
+    if require_route:
+        return None
+    try:
+        stats = psutil.net_if_stats()
+        addresses = psutil.net_if_addrs()
+    except (psutil.Error, OSError):
+        return None
+
+    matched_name = next((name for name in addresses if name.casefold() == interface_name.casefold()), None)
+    if matched_name is None:
+        return None
+    interface_stats = stats.get(matched_name)
+    if interface_stats is not None and not interface_stats.isup:
+        return None
+
+    ipv4 = None
+    for address in addresses.get(matched_name, ()):
+        if address.family != socket.AF_INET:
+            continue
+        candidate = str(address.address or "").strip()
+        if not candidate or candidate == "127.0.0.1":
+            continue
+        ipv4 = candidate
+        break
+    if ipv4 is None:
+        return None
+
+    try:
+        interface_index = socket.if_nametoindex(matched_name)
+    except OSError:
+        return None
+    return WindowsInterfaceDetails(
+        alias=matched_name,
+        index=interface_index,
+        ipv4=ipv4,
+        status="Up" if interface_stats is None or interface_stats.isup else str(interface_stats.isup),
+        has_route=False,
+    )
 
 
 def _ready_tun_interface_details(
